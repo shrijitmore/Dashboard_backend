@@ -12,15 +12,21 @@ const PORT = process.env.PORT || 5000;
 // Middleware to parse JSON bodies
 app.use(express.json()); // Add this line to parse JSON requests
 
-// Enable CORS for all routes
+// Enable CORS for the specified origin
 app.use(cors());
-
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => {
-        console.log('MongoDB connected');
-    })
-    .catch(err => console.error('MongoDB connection error:', err));
+// MongoDB Connection with more detailed error logging
+mongoose.connect(process.env.MONGODB_URI)
+.then(() => {
+    console.log('MongoDB connected successfully');
+})
+.catch(err => {
+    console.error('MongoDB connection error details:', {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        stack: err.stack
+    });
+});
 
 // Use the energy monitoring routes
 app.use(energyMonitoringRoutes);

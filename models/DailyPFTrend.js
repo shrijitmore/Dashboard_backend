@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const DailyPFTrendSchema = new mongoose.Schema({
     Date: {
@@ -22,4 +22,4 @@ const DailyPFTrendSchema = new mongoose.Schema({
 
 const DailyPFTrend = mongoose.model('DailyPFTrend', DailyPFTrendSchema);
 
-module.exports = DailyPFTrend;
+export default DailyPFTrend;

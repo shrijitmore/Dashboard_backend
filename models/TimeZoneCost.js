@@ -1,10 +1,9 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const timeZoneCostSchema = new mongoose.Schema({
     date: {
         type: Date,
-        required: true,
-        unique: true
+        required: true
     },
     zoneA: {
         type: Number,
@@ -30,9 +29,9 @@ const timeZoneCostSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Create an index on the date field for faster queries
+// If you need an index, use only one method:
 timeZoneCostSchema.index({ date: 1 });
 
 const TimeZoneCost = mongoose.model('TimeZoneCost', timeZoneCostSchema);
 
-module.exports = TimeZoneCost;
+export default TimeZoneCost;

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const KWHPartsSchema = new mongoose.Schema({
     date: {
@@ -11,5 +11,6 @@ const KWHPartsSchema = new mongoose.Schema({
     }
 });
 
-// Export the model
-module.exports = mongoose.model('KWHParts', KWHPartsSchema);
+const KWHParts = mongoose.model('KWHParts', KWHPartsSchema);
+
+export default KWHParts;

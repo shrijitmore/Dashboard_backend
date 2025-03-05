@@ -17,6 +17,9 @@ const KWHAverageSchema = new mongoose.Schema({
     timestamps: true // Automatically manage createdAt and updatedAt fields
 });
 
+// If you need an index, use only one method:
+KWHAverageSchema.index({ Date: 1 });
+
 const KWHAverage = mongoose.model('KWHAverage', KWHAverageSchema);
 
 export default KWHAverage;
