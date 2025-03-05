@@ -6,6 +6,7 @@ import KWHAverage from '../models/KWHAverage.js'; // Import the new KWHAverage m
 import KWHParts from '../models/KWHParts.js'; // Import the KWHParts model
 import ConsumptionWrtMoltenMetal from '../models/ConsumptionWrtMoltenMetel.js'; // Import the new ConsumptionWrtMoltenMetal model
 import TimeZoneCost from '../models/TimeZoneCost.js'; // Add this with other imports
+import DailyPFTrend from '../models/DailyPFTrend.js'; // Import DailyPFTrend model
 dotenv.config();
 
 const router = express.Router();
@@ -336,7 +337,7 @@ router.get('/api/consumption', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         const aggregatedData = await collection.aggregate([
@@ -422,10 +423,9 @@ router.get('/api/consumption', async (req, res) => {
             }
         ]).toArray();
 
-        // Store in DailyPFTrend collection
-        const DailyPFTrend = database.collection('dailypftrends');
+        // Replace the direct MongoDB insertion with Mongoose model
         await DailyPFTrend.deleteMany({});
-        await DailyPFTrend.insertMany(aggregatedData);
+        await DailyPFTrend.create(aggregatedData);
 
         res.json({ aggregatedData });
     } catch (error) {
