@@ -436,4 +436,23 @@ router.get('/api/consumption', async (req, res) => {
     }
 });
 
+router.get('/api/energyMonitoring', async (req, res) => {
+    const client = new MongoClient(uri);
+    try {
+        await client.connect();
+        const database = client.db('Testing');
+        const collection = database.collection('EnergyMonitoring');
+
+        // Retrieve all documents from the EnergyMonitoring collection
+        const data = await collection.find({}).toArray();
+
+        res.json({ data });
+    } catch (error) {
+        console.error('Error retrieving energy monitoring data:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    } finally {
+        await client.close();
+    }
+});
+
 export default router;
