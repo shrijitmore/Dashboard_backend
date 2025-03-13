@@ -7,10 +7,18 @@ import KWHParts from '../models/KWHParts.js'; // Import the KWHParts model
 import ConsumptionWrtMoltenMetal from '../models/ConsumptionWrtMoltenMetel.js'; // Import the new ConsumptionWrtMoltenMetal model
 import TimeZoneCost from '../models/TimeZoneCost.js'; // Add this with other imports
 import DailyPFTrend from '../models/DailyPFTrend.js'; // Import DailyPFTrend model
+import axios from 'axios';
+import OpenAI from 'openai'; // Import OpenAI client
+
 dotenv.config();
 
 const router = express.Router();
 const uri = process.env.MONGODB_URI; // Use your MongoDB URI from .env
+const endpoint = "https://models.inference.ai.azure.com"; // Set the endpoint for the model
+const modelName = process.env.LLM_MODEL; // Specify the model name
+
+// Initialize OpenAI client
+const client = new OpenAI({ baseURL: endpoint, apiKey: process.env.OPENAI_API_KEY }); // Use the OpenAI API key
 
 // Endpoint to aggregate total cost of energy by department
 router.get('/api/aggregate-energy-costs', async (req, res) => {
@@ -452,6 +460,66 @@ router.get('/api/energyMonitoring', async (req, res) => {
         res.status(500).json({ message: 'Internal Server Error' });
     } finally {
         await client.close();
+    }
+});
+
+// New endpoint to fetch chat data and respond with concatenated text
+router.post('/api/chat-response', async (req, res) => {
+    const { prompt } = req.body; // Extract prompt from request body
+    const mongoClient = new MongoClient(uri); // Declare mongoClient here
+    try {
+        console.log('Fetching data from MongoDB...');
+        await mongoClient.connect();
+        const database = mongoClient.db('Testing');
+        const collection = database.collection('consumptionwrtmoltenmetals');
+        const data = await collection.find({}).toArray(); // Fetch data from MongoDB
+
+        console.log('Data fetched from MongoDB:', data); // Log the fetched data
+
+        // Prepare the message for the model, including the entire dataset
+        const messages = [
+            { role: "system", content: "You are a data generator. Based on the prompt, provide only the JSON data needed for plotting without any descriptions or explanations." },
+            { role: "user", content: `${prompt} Here is the data: ${JSON.stringify(data)}` }
+        ];
+
+        // Call the OpenAI model
+        const response = await client.chat.completions.create({
+            messages: messages,
+            temperature: 1.0,
+            top_p: 1.0,
+            max_tokens: 1000,
+            model: modelName
+        });
+
+        console.log('Received response from GPT-4o mini API.');
+        const modelResponse = response.choices[0].message.content; // Get the model's response
+
+        // Clean the model response to remove any unwanted characters
+        const cleanedResponse = modelResponse.replace(/```json|```/g, '').trim(); // Remove markdown formatting
+
+        // Parse the cleaned model response as JSON
+        let plotData;
+        try {
+            plotData = JSON.parse(cleanedResponse); // Parse the JSON response from the model
+            
+            // Check if the response contains relevant data
+            if (!plotData || (Array.isArray(plotData) && plotData.length === 0)) {
+                return res.json({ message: 'No relevant data' }); // Return message if no relevant data found
+            }
+        } catch (error) {
+            console.error('Error parsing model response:', error);
+            return res.status(500).json({ message: 'Error parsing model response' });
+        }
+
+        // Send the structured plot data
+        res.json({
+            plotData: plotData // Send the structured data for the frontend
+        });
+    } catch (error) {
+        console.error('Error querying GPT-4o mini:', error.message);
+        res.status(500).json({ message: 'Internal Server Error', error: error.message }); // Send error details
+    } finally {
+        await mongoClient.close(); // Ensure the MongoDB client is closed
     }
 });
 

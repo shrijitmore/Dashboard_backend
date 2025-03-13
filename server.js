@@ -9,29 +9,24 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware to parse JSON bodies
-app.use(express.json()); // Add this line to parse JSON requests
+app.use(express.json()); 
 
-// Enable CORS for the specified origin
 app.use(cors());
+
 // MongoDB Connection with more detailed error logging
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => {
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => {
     console.log('MongoDB connected successfully');
-})
-.catch(err => {
-    console.error('MongoDB connection error details:', {
-        name: err.name,
-        message: err.message,
-        code: err.code,
-        stack: err.stack
-    });
-});
+  })
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+  });
 
 // Use the energy monitoring routes
-app.use(energyMonitoringRoutes);
+app.use('/', energyMonitoringRoutes); // Register the energy monitoring routes
+
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
