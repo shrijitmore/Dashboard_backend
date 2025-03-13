@@ -470,7 +470,7 @@ router.post('/api/chat-response', async (req, res) => {
     try {
         console.log('Fetching data from MongoDB...');
         await mongoClient.connect();
-        const database = mongoClient.db('Testing');
+        const database = mongoClient.db('test');
         const collection = database.collection('consumptionwrtmoltenmetals');
         const data = await collection.find({}).toArray(); // Fetch data from MongoDB
 
