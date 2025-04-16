@@ -465,7 +465,7 @@ router.post('/api/chat-response', async (req, res) => {
     const mongoClient = new MongoClient(uri);
     try {
         await mongoClient.connect();
-        const database = mongoClient.db('Testing');
+        const database = mongoClient.db('test');
         const collection = database.collection('consumptionwrtmoltenmetals');
         
         const data = await collection.find({}).toArray();
