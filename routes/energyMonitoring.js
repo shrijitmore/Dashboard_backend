@@ -470,24 +470,6 @@ router.post('/api/chat-response', async (req, res) => {
         
         const data = await collection.find({}).toArray();
 
-        // const sanitizedData = data.map(item => ({
-        //     id: item.ID,
-        //     date: item.Date,
-        //     department: item.Department,
-        //     machineId: item["Machine ID"],
-        //     msebZone: item["MSEB Zone"],
-        //     kwhReading: typeof item["KWH Reading"] === 'number' ? item["KWH Reading"] : parseFloat(item["KWH Reading"]) || 0,
-        //     consumption: typeof item.Consumption === 'number' ? item.Consumption : parseFloat(item.Consumption) || 0,
-        //     powerFactor: typeof item["P#F"] === 'number' ? item["P#F"] : parseFloat(item["P#F"]) || 0,
-        //     partsProduced: typeof item["Parts produced"] === 'number' ? item["Parts produced"] : parseInt(item["Parts produced"]) || 0,
-        //     moltenMetal: typeof item["Molten Metal"] === 'number' ? item["Molten Metal"] : parseFloat(item["Molten Metal"]) || 0,
-        //     costOfEnergy: typeof item["Cost of Energy"] === 'string' ? 
-        //         parseFloat(item["Cost of Energy"].replace(/[₹,\s]/g, '')) || 0 : 
-        //         parseFloat(item["Cost of Energy"]) || 0,
-        //     kwhPerTonne: typeof item.KWH_Tonne === 'number' ? item.KWH_Tonne : parseFloat(item.KWH_Tonne) || 0,
-        //     kwhPerPart: typeof item.KWH_part === 'number' ? item.KWH_part : parseFloat(item.KWH_part) || 0,
-        //     hours: typeof item.Hours === 'number' ? item.Hours : parseInt(item.Hours) || 0
-        // }));
 
         const modelPrompt = `
             Based on the following energy monitoring data, analyze and create a visualization or card display for this query: "${prompt}"
