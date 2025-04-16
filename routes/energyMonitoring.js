@@ -1,5 +1,5 @@
 import express from 'express';
-import { MongoClient, ObjectId } from 'mongodb'; // Import ObjectId for querying by ID
+import { MongoClient} from 'mongodb'; // Import ObjectId for querying by ID
 import dotenv from 'dotenv';
 import DepartmentCost from '../models/DepartmentCost.js';
 import KWHAverage from '../models/KWHAverage.js'; // Import the new KWHAverage model
@@ -7,18 +7,15 @@ import KWHParts from '../models/KWHParts.js'; // Import the KWHParts model
 import ConsumptionWrtMoltenMetal from '../models/ConsumptionWrtMoltenMetel.js'; // Import the new ConsumptionWrtMoltenMetal model
 import TimeZoneCost from '../models/TimeZoneCost.js'; // Add this with other imports
 import DailyPFTrend from '../models/DailyPFTrend.js'; // Import DailyPFTrend model
-import axios from 'axios';
-import OpenAI from 'openai'; // Import OpenAI client
+import { GoogleGenAI } from "@google/genai"; // Import the GoogleGenAI package
 
 dotenv.config();
 
 const router = express.Router();
 const uri = process.env.MONGODB_URI; // Use your MongoDB URI from .env
-const endpoint = "https://models.inference.ai.azure.com"; // Set the endpoint for the model
-const modelName = process.env.LLM_MODEL; // Specify the model name
 
-// Initialize OpenAI client
-const client = new OpenAI({ baseURL: endpoint, apiKey: process.env.OPENAI_API_KEY }); // Use the OpenAI API key
+const gemini_api_key = process.env.GEMINI_API_KEY; // Use the Gemini API key
+const ai = new GoogleGenAI({ apiKey: gemini_api_key }); // Initialize with your API key
 
 // Endpoint to aggregate total cost of energy by department
 router.get('/api/aggregate-energy-costs', async (req, res) => {
@@ -345,7 +342,7 @@ router.get('/api/consumption', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('test');
+        const database = client.db('Testing');
         const collection = database.collection('EnergyMonitoring');
 
         const aggregatedData = await collection.aggregate([
@@ -463,63 +460,175 @@ router.get('/api/energyMonitoring', async (req, res) => {
     }
 });
 
-// New endpoint to fetch chat data and respond with concatenated text
 router.post('/api/chat-response', async (req, res) => {
-    const { prompt } = req.body; // Extract prompt from request body
-    const mongoClient = new MongoClient(uri); // Declare mongoClient here
+    const { prompt } = req.body;
+    const mongoClient = new MongoClient(uri);
     try {
-        console.log('Fetching data from MongoDB...');
         await mongoClient.connect();
-        const database = mongoClient.db('test');
+        const database = mongoClient.db('Testing');
         const collection = database.collection('consumptionwrtmoltenmetals');
-        const data = await collection.find({}).toArray(); // Fetch data from MongoDB
+        
+        const data = await collection.find({}).toArray();
 
-        console.log('Data fetched from MongoDB:', data); // Log the fetched data
+        // const sanitizedData = data.map(item => ({
+        //     id: item.ID,
+        //     date: item.Date,
+        //     department: item.Department,
+        //     machineId: item["Machine ID"],
+        //     msebZone: item["MSEB Zone"],
+        //     kwhReading: typeof item["KWH Reading"] === 'number' ? item["KWH Reading"] : parseFloat(item["KWH Reading"]) || 0,
+        //     consumption: typeof item.Consumption === 'number' ? item.Consumption : parseFloat(item.Consumption) || 0,
+        //     powerFactor: typeof item["P#F"] === 'number' ? item["P#F"] : parseFloat(item["P#F"]) || 0,
+        //     partsProduced: typeof item["Parts produced"] === 'number' ? item["Parts produced"] : parseInt(item["Parts produced"]) || 0,
+        //     moltenMetal: typeof item["Molten Metal"] === 'number' ? item["Molten Metal"] : parseFloat(item["Molten Metal"]) || 0,
+        //     costOfEnergy: typeof item["Cost of Energy"] === 'string' ? 
+        //         parseFloat(item["Cost of Energy"].replace(/[₹,\s]/g, '')) || 0 : 
+        //         parseFloat(item["Cost of Energy"]) || 0,
+        //     kwhPerTonne: typeof item.KWH_Tonne === 'number' ? item.KWH_Tonne : parseFloat(item.KWH_Tonne) || 0,
+        //     kwhPerPart: typeof item.KWH_part === 'number' ? item.KWH_part : parseFloat(item.KWH_part) || 0,
+        //     hours: typeof item.Hours === 'number' ? item.Hours : parseInt(item.Hours) || 0
+        // }));
 
-        // Prepare the message for the model, including the entire dataset
-        const messages = [
-            { role: "system", content: "You are a data generator. Based on the prompt, provide only the JSON data needed for plotting without any descriptions or explanations." },
-            { role: "user", content: `${prompt} Here is the data: ${JSON.stringify(data)}` }
-        ];
+        const modelPrompt = `
+            Based on the following energy monitoring data, analyze and create a visualization or card display for this query: "${prompt}"
+            
+            Data Context:
+            - Consumption and moltenmetal usage
+            
+            Raw Data: ${JSON.stringify(data)}
+            
+            Instructions:
+            1. RELEVANCE CHECK:
+               First, determine if the query is relevant to given data
+            
+            2. FOR NON-RELEVANT QUERIES:
+               Return this exact format:
+               {
+                 "displayType": "cards",
+                 "cards": [{
+                   "title": "Not Relevant Query",
+                   "value": "N/A",
+                   "unit": "",
+                   "description": "This query is not related to energy monitoring data. Try asking about:\n• Energy consumption patterns\n• Power factor analysis\n• Production costs\n• Department efficiency\n• Machine performance\n• Time-based trends",
+                   "trend": "neutral"
+                 }]
+               } 
+            
+            3. FOR RELEVANT DATA WITH TRENDS/PATTERNS:
+               Return in this format:
+               {
+                 "displayType": "chart",
+                 "chartConfig": {
+                   "chartType": "line" | "bar" | "pie" | "scatter",
+                   "title": "Clear, descriptive title",
+                   "labels": ["x-axis labels"],
+                   "datasets": [{
+                     "label": "Meaningful series name",
+                     "data": [numerical values only],
+                     "backgroundColor": "appropriate color",
+                     "borderColor": "appropriate color",
+                     "borderWidth": number
+                   }],
+                   "options": {
+                     "scales": {
+                       "y": {
+                         "beginAtZero": boolean,
+                         "title": {"text": "axis label"}
+                       }
+                     }
+                   }
+                 }
+               }
+            
+            4. FOR SINGLE METRICS OR INSIGHTS:
+               Return in this format:
+               {
+                 "displayType": "cards",
+                 "cards": [{
+                   "title": "Clear metric name",
+                   "value": "precise value",
+                   "unit": "appropriate unit",
+                   "description": "Concise, informative context",
+                   "trend": "up" | "down" | "neutral"
+                 }]
+               }
+            
+            IMPORTANT RULES:
+            • Return ONLY valid JSON
+            • Use ONLY data provided in the Raw Data
+            • Ensure numerical values are properly formatted
+            • Include units where applicable
+            • Keep descriptions concise and informative
+            • Use appropriate chart types for data visualization
+            • Maintain consistent decimal places for numerical values
+            • Include trend indicators only when there's clear directional change
+            
+            Return ONLY a valid JSON object matching one of the above formats.`;
 
-        // Call the OpenAI model
-        const response = await client.chat.completions.create({
-            messages: messages,
-            temperature: 1.0,
-            top_p: 1.0,
-            max_tokens: 1000,
-            model: modelName
+        const response = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: modelPrompt
         });
 
-        console.log('Received response from GPT-4o mini API.');
-        const modelResponse = response.choices[0].message.content; // Get the model's response
-
-        // Clean the model response to remove any unwanted characters
-        const cleanedResponse = modelResponse.replace(/```json|```/g, '').trim(); // Remove markdown formatting
-
-        // Parse the cleaned model response as JSON
-        let plotData;
-        try {
-            plotData = JSON.parse(cleanedResponse); // Parse the JSON response from the model
-            
-            // Check if the response contains relevant data
-            if (!plotData || (Array.isArray(plotData) && plotData.length === 0)) {
-                return res.json({ message: 'No relevant data' }); // Return message if no relevant data found
-            }
-        } catch (error) {
-            console.error('Error parsing model response:', error);
-            return res.status(500).json({ message: 'Error parsing model response' });
+        if (!response || !response.text) {
+            return res.json({ message: 'No relevant data' });
         }
 
-        // Send the structured plot data
-        res.json({
-            plotData: plotData // Send the structured data for the frontend
-        });
+        try {
+            // Clean up the response text and log it for debugging
+            let jsonText = response.text
+                .replace(/```json\n?|\n?```/g, '')
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+                .trim();
+            
+            console.log('Cleaned JSON text:', jsonText); // Add this line for debugging
+
+            // Try to parse the JSON
+            let displayConfig;
+            try {
+                displayConfig = JSON.parse(jsonText);
+            } catch (parseError) {
+                console.error('JSON Parse Error. Raw text:', jsonText);
+                throw new Error(`Invalid JSON format: ${parseError.message}`);
+            }
+
+            // Validate the configuration based on display type
+            if (!displayConfig.displayType || !['chart', 'cards'].includes(displayConfig.displayType)) {
+                throw new Error('Invalid display configuration');
+            }
+
+            if (displayConfig.displayType === 'chart' && 
+                (!displayConfig.chartConfig || !displayConfig.chartConfig.chartType || 
+                 !displayConfig.chartConfig.datasets || !displayConfig.chartConfig.labels)) {
+                throw new Error('Invalid chart configuration');
+            }
+
+            if (displayConfig.displayType === 'cards' && 
+                (!Array.isArray(displayConfig.cards) || displayConfig.cards.length === 0 ||
+                 !displayConfig.cards.every(card => card.title && card.value))) {
+                throw new Error('Invalid cards configuration');
+            }
+
+            // Send the display configuration and original data
+            res.json({
+                displayConfig,
+            });
+        } catch (parseError) {
+            console.error('Error parsing response:', parseError);
+            res.status(500).json({ 
+                message: 'Error parsing AI response', 
+                error: parseError.message,
+                rawResponse: response.text.substring(0, 1000)
+            });
+        }
     } catch (error) {
-        console.error('Error querying GPT-4o mini:', error.message);
-        res.status(500).json({ message: 'Internal Server Error', error: error.message }); // Send error details
+        console.error('Error:', error);
+        res.status(500).json({ 
+            message: 'Internal Server Error', 
+            error: error.message 
+        });
     } finally {
-        await mongoClient.close(); // Ensure the MongoDB client is closed
+        await mongoClient.close();
     }
 });
 
