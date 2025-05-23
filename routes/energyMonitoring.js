@@ -22,7 +22,7 @@ router.get('/api/aggregate-energy-costs', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         // Aggregate total cost of energy for each department
@@ -71,7 +71,7 @@ router.get('/api/avgKWH', async (req, res) => {
    const client = new MongoClient(uri);
    try {
        await client.connect();
-       const database = client.db('Testing');
+       const database = client.db('test');
        const collection = database.collection('EnergyMonitoring');
 
        // Calculate date-wise average of KWH_Tonne for Machine IDs "IF1" and "IF2"
@@ -133,7 +133,7 @@ router.get('/api/KWHParts', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         // Aggregate KWH_part by date and machine ID
@@ -192,7 +192,7 @@ router.get('/api/ConsumptionMoltenMetal', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         // Aggregate data by date, summing molten metal and consumption
@@ -239,7 +239,7 @@ router.get('/api/TimeZone', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         const aggregatedData = await collection.aggregate([
@@ -342,7 +342,7 @@ router.get('/api/consumption', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         const aggregatedData = await collection.aggregate([
@@ -445,7 +445,7 @@ router.get('/api/energyMonitoring', async (req, res) => {
     const client = new MongoClient(uri);
     try {
         await client.connect();
-        const database = client.db('Testing');
+        const database = client.db('test');
         const collection = database.collection('EnergyMonitoring');
 
         // Retrieve all documents from the EnergyMonitoring collection
@@ -460,22 +460,75 @@ router.get('/api/energyMonitoring', async (req, res) => {
     }
 });
 
+
+
 router.post('/api/chat-response', async (req, res) => {
     const { prompt } = req.body;
     const mongoClient = new MongoClient(uri);
     try {
         await mongoClient.connect();
         const database = mongoClient.db('test');
-        const collection = database.collection('consumptionwrtmoltenmetals');
-        
-        const data = await collection.find({}).toArray();
 
+        // First, ask the LLM to determine the relevant collection
+        const collectionSelectionPrompt = `
+            Based on the following query, determine which MongoDB collection would be most relevant to answer it.
+            Query: "${prompt}"
+            
+            Available collections and their purposes:
+            1. consumptionwrtmoltenmetals - Contains data about molten metal consumption and usage efficiency
+            2. kwhaverages - Contains average KWH data for machines IF1 and IF2
+            3. kwhparts - Contains KWH parts data for different machines
+            4. timezonecosts - Contains time zone-based cost data (MSEB zones A, B, C, D)
+            5. departmentcosts - Contains department-wise cost data
+            6. dailypftrends - Contains daily power factor trends and consumption data
+            
+            Return ONLY the collection name that is most relevant to answer this query. 
+            Return format should be a single string containing just the collection name.
+            If no collection is relevant, return "none".`;
+
+        const collectionResponse = await ai.models.generateContent({
+            model: "gemini-2.0-flash",
+            contents: collectionSelectionPrompt
+        });
+
+        // console.log("collectionResponse", collectionResponse);
+
+        if (!collectionResponse || !collectionResponse.candidates || !collectionResponse.candidates[0]?.content?.parts?.[0]?.text) {
+            return res.json({ message: 'Error determining relevant collection' });
+        }
+
+        // Extract the collection name from the response
+        const relevantCollection = collectionResponse.candidates[0].content.parts[0].text.trim().toLowerCase();
+        
+        console.log("Selected collection:", relevantCollection);
+
+        // If no relevant collection was found, return a not relevant response
+        if (relevantCollection === 'none') {
+            return res.json({
+                displayConfig: {
+                    displayType: "cards",
+                    cards: [{
+                        title: "Not Relevant Query",
+                        value: "N/A",
+                        unit: "",
+                        description: "This query is not related to energy monitoring data. Try asking about:\n• Energy consumption patterns\n• Power factor analysis\n• Production costs\n• Department efficiency\n• Machine performance\n• Time-based trends",
+                        trend: "neutral"
+                    }]
+                }
+            });
+        }
+
+        // Get data from the selected collection
+        const collection = database.collection(relevantCollection);
+        const data = await collection.find({}).toArray();
+        // console.log("data", data);
 
         const modelPrompt = `
             Based on the following energy monitoring data, analyze and create a visualization or card display for this query: "${prompt}"
             
             Data Context:
-            - Consumption and moltenmetal usage
+            - Data from collection: ${relevantCollection}
+            - ${getCollectionDescription(relevantCollection)}
             
             Raw Data: ${JSON.stringify(data)}
             
@@ -563,7 +616,7 @@ router.post('/api/chat-response', async (req, res) => {
                 .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
                 .trim();
             
-            console.log('Cleaned JSON text:', jsonText); // Add this line for debugging
+            // console.log('Cleaned JSON text:', jsonText); // Add this line for debugging
 
             // Try to parse the JSON
             let displayConfig;
@@ -594,6 +647,7 @@ router.post('/api/chat-response', async (req, res) => {
             // Send the display configuration and original data
             res.json({
                 displayConfig,
+                collection: relevantCollection
             });
         } catch (parseError) {
             console.error('Error parsing response:', parseError);
@@ -613,5 +667,18 @@ router.post('/api/chat-response', async (req, res) => {
         await mongoClient.close();
     }
 });
+
+// Helper function to get collection description
+function getCollectionDescription(collection) {
+    const descriptions = {
+        'consumptionwrtmoltenmetals': 'Consumption and molten metal usage data',
+        'kwhaverages': 'Average KWH data for machines IF1 and IF2',
+        'kwhparts': 'KWH parts data by machine',
+        'timezonecosts': 'Time zone-based cost data',
+        'departmentcosts': 'Department-wise cost data',
+        'dailypftrends': 'Daily power factor trends'
+    };
+    return descriptions[collection] || 'Energy monitoring data';
+}
 
 export default router;
